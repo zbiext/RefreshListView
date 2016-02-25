@@ -28,7 +28,7 @@ public class MainActivity extends Activity implements DropDownRefListView.OnRefr
         mListView = (DropDownRefListView) findViewById(R.id.listview);
 
         mDatas = new ArrayList<String>();
-        for (int i = 0; i < 30; i++) {
+        for (int i = 1; i <= 30; i++) {
             mDatas.add("数据条目---" + i);
         }
 
@@ -44,14 +44,14 @@ public class MainActivity extends Activity implements DropDownRefListView.OnRefr
             @Override
             public void run() {
                 mDatas.clear();
-                for (int i = 0; i < 30; i++) {
-                    mDatas.add(count + "次的刷新后的数据条目---" + i);
+                for (int i = 1; i <= 30; i++) {
+                    mDatas.add("第"+count + "次的刷新后的数据条目---" + i);
                 }
                 mAdapter.notifyDataSetChanged();
                 count++;
                 mListView.refreshingFinish();
             }
-        }, 1500);
+        }, 5000);
     }
 
     private class DropDownRefreshAdapter extends BaseAdapter {
