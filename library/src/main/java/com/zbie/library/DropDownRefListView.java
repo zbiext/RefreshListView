@@ -34,6 +34,8 @@ public class DropDownRefListView extends ListView {
     private static final int    STATE_PULL_DOWN       = 0;//下拉的状态(move拖动)
     private static final int    STATE_RELEASE_REFRESH = 1;//释放刷新状态(up松手)
     private static final int    STATE_REFRESHING      = 2;//正在刷新(请求数据)
+    private              int    mHiddeHeight          = -1;//给一个默认值，在初始化时是view是不可能有的
+    private              float  mDownY                = -1;//给一个默认值，在初始化时是手指不可能触摸到的(viewpager抢了down的动作,listview没有了down的touch事件,从导致一个BUG:viewpager没有完全露出来且手指点击到viewpager的位置向下拖动时,会出现拖不动的情况)
     private List<OnRefreshListener> mListenerContainer;
     private View                    mRefreshHeader;
     private ProgressBar             mPbLoading;
@@ -43,7 +45,7 @@ public class DropDownRefListView extends ListView {
     private int                     mRefreshHeight;
     private RotateAnimation         mDown2UpAnimation;
     private RotateAnimation         mUp2DownAnimation;
-    private float                   mDownY;
+//    private float                   mDownY;
     private int                     mCurrentState;
 
     public DropDownRefListView(Context context) {
@@ -110,6 +112,13 @@ public class DropDownRefListView extends ListView {
             case MotionEvent.ACTION_MOVE://拖动时
 
                 float moveY = ev.getY();
+                if (mDownY == -1) {
+                    //进入这里,表示listview的down事件被viewpager抢了,
+                    //没有走down,就让mDownY等于第一个moveY的值
+                    mDownY = moveY;
+                }
+
+
                 //移动的差值
                 float diffY = moveY - mDownY;//向下滑,值大于0;向上滑,值小于0
 
@@ -118,10 +127,31 @@ public class DropDownRefListView extends ListView {
                     break;
                 }
 
+//                取到listView左上角的点
+                int[] lvLoc = new int[2];
+                this.getLocationOnScreen(lvLoc);
+                Log.d(TAG + 1, "lv Y : " + lvLoc[1]);
+
+                //取到第0个item左上角的点
+                int[] itemLoc = new int[2];
+                View itemView = this.getChildAt(0);
+                itemView.getLocationOnScreen(itemLoc);
+                Log.d(TAG + 1, "item Y : " + itemLoc[1]);
+
+                Log.d(TAG + 1, "-------------------------------");
+                if (mHiddeHeight == -1) {
+
+                    mHiddeHeight = lvLoc[1] - itemLoc[1];
+                    Log.d(TAG + 1, "height : " + mHiddeHeight);
+                }
+
                 //当第0个可见时，用户是由上往下拉动时(diffY > 0)，需要刷新头可见
                 if (diffY > 0 && getFirstVisiblePosition() == 0) {
                     //需要刷新头可见
-                    int top = (int) (diffY - mRefreshHeight + .5f);
+//                    int top = (int) (diffY - mRefreshHeight + .5f);
+
+                    //(BUG:有某些条目没有完成显示时,top的值需要还需要减去隐藏的高度)
+                    int top = (int) (diffY - mRefreshHeight + .5f - mHiddeHeight);
 //                    Log.d(TAG, "top：" + top);
                     mRefreshHeader.setPadding(0, top, 0, 0);
                     //top大于0,就是diffY大于mRefreshHeight,即可以显示释放刷新
@@ -134,11 +164,21 @@ public class DropDownRefListView extends ListView {
                         mCurrentState = STATE_PULL_DOWN;
                         refreshUI();
                     }
-                    return true;
+                    if (mHiddeHeight == -1) {//mHiddeHeight不等于-1就是藏一半的情况
+                        return true;
+                    } else {
+                        // 第一次是藏一半时
+                        break;
+                    }
                 }
                 break;
             case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
 
+                //重置 (隐藏条目的具体隐藏)值
+                mHiddeHeight = -1;
+                //重置mDownY的值
+                mDownY = -1;
                 // 松开时正在刷新
 
                 //如果是释放刷新时松开的，变为正在刷新

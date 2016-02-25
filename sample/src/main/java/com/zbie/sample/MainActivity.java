@@ -3,9 +3,12 @@ package com.zbie.sample;
 import android.app.Activity;
 import android.os.Bundle;
 import android.os.Handler;
+import android.support.v4.view.PagerAdapter;
+import android.support.v4.view.ViewPager;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.zbie.library.DropDownRefListView;
@@ -15,10 +18,18 @@ import java.util.List;
 
 public class MainActivity extends Activity implements DropDownRefListView.OnRefreshListener {
 
-    private DropDownRefListView    mListView;
+    private DropDownRefListView mListView;
+    private ViewPager           mPager;
+    private int[] mPics = new int[]{R.drawable.pic_1,
+            R.drawable.pic_2,
+            R.drawable.pic_3,
+            R.drawable.pic_4};
+
     private List<String>           mDatas;
     private DropDownRefreshAdapter mAdapter;
-    private int count = 1;
+
+    private int mRefreshCount  = 1;
+    private int mLoadMoreCount = 1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -27,6 +38,11 @@ public class MainActivity extends Activity implements DropDownRefListView.OnRefr
 
         mListView = (DropDownRefListView) findViewById(R.id.listview);
 
+        View header = View.inflate(this, R.layout.header, null);
+        mPager = (ViewPager) header.findViewById(R.id.viewpager);
+        mPager.setAdapter(new HeaderAdapter());
+
+
         mDatas = new ArrayList<String>();
         for (int i = 1; i <= 30; i++) {
             mDatas.add("数据条目---" + i);
@@ -34,6 +50,8 @@ public class MainActivity extends Activity implements DropDownRefListView.OnRefr
 
         mAdapter = new DropDownRefreshAdapter();
         mListView.setAdapter(mAdapter);
+        //listview添加自定义的头
+        mListView.addHeaderView(header);
 
         mListView.addOnRefreshListener(this);
     }
@@ -45,13 +63,45 @@ public class MainActivity extends Activity implements DropDownRefListView.OnRefr
             public void run() {
                 mDatas.clear();
                 for (int i = 1; i <= 30; i++) {
-                    mDatas.add("第"+count + "次的刷新后的数据条目---" + i);
+                    mDatas.add("第" + mRefreshCount + "次的刷新后的数据条目---" + i);
                 }
                 mAdapter.notifyDataSetChanged();
-                count++;
+                mRefreshCount++;
                 mListView.refreshingFinish();
             }
-        }, 5000);
+        }, 1200);
+    }
+
+    private class HeaderAdapter extends PagerAdapter {
+
+        @Override
+        public Object instantiateItem(ViewGroup container, int position) {
+            ImageView iv = new ImageView(MainActivity.this);
+            iv.setScaleType(ImageView.ScaleType.FIT_XY);
+            iv.setImageResource(mPics[position]);
+
+            container.addView(iv);
+
+            return iv;
+        }
+
+        @Override
+        public int getCount() {
+            if(mPics != null) {
+                return mPics.length;
+            }
+            return 0;
+        }
+
+        @Override
+        public boolean isViewFromObject(View view, Object object) {
+            return view == object;
+        }
+
+        @Override
+        public void destroyItem(ViewGroup container, int position, Object object) {
+            container.removeView((View) object);
+        }
     }
 
     private class DropDownRefreshAdapter extends BaseAdapter {
