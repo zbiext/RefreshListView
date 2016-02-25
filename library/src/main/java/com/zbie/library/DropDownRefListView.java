@@ -7,6 +7,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.RotateAnimation;
+import android.widget.AbsListView;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.ProgressBar;
@@ -28,25 +29,35 @@ import java.util.List;
  * 邮箱            hyxt2011@163.com
  * 描述            TODO
  */
-public class DropDownRefListView extends ListView {
+public class DropDownRefListView extends ListView implements AbsListView.OnScrollListener {
 
     private static final String TAG                   = DropDownRefListView.class.getSimpleName();
     private static final int    STATE_PULL_DOWN       = 0;//下拉的状态(move拖动)
     private static final int    STATE_RELEASE_REFRESH = 1;//释放刷新状态(up松手)
     private static final int    STATE_REFRESHING      = 2;//正在刷新(请求数据)
+
     private              int    mHiddeHeight          = -1;//给一个默认值，在初始化时是view是不可能有的
     private              float  mDownY                = -1;//给一个默认值，在初始化时是手指不可能触摸到的(viewpager抢了down的动作,listview没有了down的touch事件,从导致一个BUG:viewpager没有完全露出来且手指点击到viewpager的位置向下拖动时,会出现拖不动的情况)
     private List<OnRefreshListener> mListenerContainer;
     private View                    mRefreshHeader;
+
     private ProgressBar             mPbLoading;
     private ImageView               mIvArrow;
     private TextView                mTvState;
     private TextView                mTvData;
+
     private int                     mRefreshHeight;
+
     private RotateAnimation         mDown2UpAnimation;
     private RotateAnimation         mUp2DownAnimation;
-//    private float                   mDownY;
+
     private int                     mCurrentState;
+    private View                    mFooterView;
+    private int                     mFooterHeight;
+    /**
+     * 是否正在请求加载更多
+     */
+    private boolean                 mIsLoadingmore;
 
     public DropDownRefListView(Context context) {
         super(context);
@@ -57,6 +68,10 @@ public class DropDownRefListView extends ListView {
 
         //初始化刷新的头
         initRefreshheader();
+
+        //初始化加载更多的底部
+        initLoadMoreFooter();
+
         //由向下变为向上
         mDown2UpAnimation = new RotateAnimation(0,
                 180,
@@ -99,6 +114,44 @@ public class DropDownRefListView extends ListView {
         mRefreshHeight = mRefreshHeader.getMeasuredHeight();
 //        Log.d(TAG, "mRefreshHeight:" + mRefreshHeight);
         mRefreshHeader.setPadding(0, -mRefreshHeight, 0, 0);
+
+    }
+
+    private void initLoadMoreFooter() {
+        mFooterView = View.inflate(getContext(), R.layout.refresh_footer, null);
+        addFooterView(mFooterView);
+
+        //计算footer高度
+        mFooterView.measure(0, 0);
+        mFooterHeight = mRefreshHeader.getMeasuredHeight();
+        //listview设置滑动监听,
+        setOnScrollListener(this);
+    }
+
+    @Override
+    public void onScrollStateChanged(AbsListView view, int scrollState) {
+        if (mCurrentState == STATE_REFRESHING) {
+            //正在刷新中,不能去请求数据
+            return;
+        }
+
+        if (mIsLoadingmore) {//false的情况不要去请求数据
+            return;
+        }
+        //如果滑动到最后一个,去加载更多的数据
+        int lastPosition = getLastVisiblePosition();
+        int maxIndex     = getAdapter().getCount() - 1;
+        if (lastPosition == maxIndex && scrollState == OnScrollListener.SCROLL_STATE_IDLE) {
+            //已滑倒最后,加载更多
+            mIsLoadingmore = true;
+            //暴露接口,让这里来回调
+            notifyOnLoadingMore();
+        }
+
+    }
+
+    @Override
+    public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
 
     }
 
@@ -258,17 +311,34 @@ public class DropDownRefListView extends ListView {
 
     /**
      * 刷新(数据请求)结束
+     *
+     * @param hasMore 是否还有更多
+     */
+    public void refreshingFinish(boolean hasMore) {
+        if (mIsLoadingmore) {
+            //加载更多结束
+            mIsLoadingmore = false;
+            if (!hasMore) {
+                //没有更多,隐藏footer
+                mFooterView.setPadding(0, -mFooterHeight, 0, 0);
+            }
+        } else {
+            //改变刷新的状态+刷新UI
+            mCurrentState = STATE_PULL_DOWN;
+            refreshUI();
+            //刷新头回去,全部隐藏起来
+            int start = mRefreshHeader.getPaddingTop();
+            int end = -mRefreshHeight;//继续隐藏
+            doHeaderAnimator(start, end, false);
+            mTvData.setText("上次更新时间:" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(System.currentTimeMillis()));
+        }
+    }
+
+    /**
+     * 刷新结束的方法和加载更多结束
      */
     public void refreshingFinish() {
-        //改变刷新的状态+刷新UI
-        mCurrentState = STATE_PULL_DOWN;
-        refreshUI();
-        //刷新头回去,全部隐藏起来
-        int start = mRefreshHeader.getPaddingTop();
-        int end   = -mRefreshHeight;//继续隐藏
-        doHeaderAnimator(start, end, false);
-        mTvData.setText("上次更新时间:" + new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(System.currentTimeMillis()));
-
+        refreshingFinish(true);
     }
 
     /**
@@ -334,6 +404,16 @@ public class DropDownRefListView extends ListView {
     }
 
     /**
+     * 通知所有,进行加载更多工作
+     */
+    private void notifyOnLoadingMore() {
+        for (Iterator<OnRefreshListener> iterator = mListenerContainer.iterator(); iterator.hasNext(); ) {
+            OnRefreshListener listener = iterator.next();
+            listener.onLoadingMore();
+        }
+    }
+
+    /**
      * 刷新监听
      */
     public interface OnRefreshListener {
@@ -341,5 +421,10 @@ public class DropDownRefListView extends ListView {
          * 正在刷新的回调
          */
         void OnRefreshing();
+
+        /**
+         * 正在加载更多时候的回调
+         */
+        void onLoadingMore();
     }
 }

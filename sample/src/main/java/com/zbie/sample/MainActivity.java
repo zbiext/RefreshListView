@@ -7,9 +7,11 @@ import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.BaseAdapter;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.zbie.library.DropDownRefListView;
 
@@ -54,6 +56,14 @@ public class MainActivity extends Activity implements DropDownRefListView.OnRefr
         mListView.addHeaderView(header);
 
         mListView.addOnRefreshListener(this);
+
+        //设置listView的item点击事件
+        mListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                Toast.makeText(MainActivity.this, "点击了条目" + position, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     @Override
@@ -63,11 +73,36 @@ public class MainActivity extends Activity implements DropDownRefListView.OnRefr
             public void run() {
                 mDatas.clear();
                 for (int i = 1; i <= 30; i++) {
-                    mDatas.add("第" + mRefreshCount + "次的刷新后的数据条目---" + i);
+                    mDatas.add("第" + mRefreshCount + "次的 下拉刷新 后的条目---" + i);
                 }
                 mAdapter.notifyDataSetChanged();
                 mRefreshCount++;
                 mListView.refreshingFinish();
+            }
+        }, 1200);
+    }
+
+    @Override
+    public void onLoadingMore() {
+        new Handler().postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                //网络翻页的数据---> list
+                if (mLoadMoreCount >= 4) {
+                    Toast.makeText(MainActivity.this, "亲,已经没有更多了", Toast.LENGTH_SHORT).show();
+                    mListView.refreshingFinish(false);
+                } else {
+                    List<String> list = new ArrayList<>();
+                    for (int i = 0; i < 10; i++) {
+                        list.add("第" + mLoadMoreCount + "次的 加载更多 后的条目---" + i);
+                    }
+                    mLoadMoreCount++;
+                    mDatas.addAll(list);
+                    //ui更新
+                    mAdapter.notifyDataSetChanged();
+                    //通知加载更多完成 ??为下一次加载更多做准备 TODO:
+                    mListView.refreshingFinish();
+                }
             }
         }, 1200);
     }
@@ -87,7 +122,7 @@ public class MainActivity extends Activity implements DropDownRefListView.OnRefr
 
         @Override
         public int getCount() {
-            if(mPics != null) {
+            if (mPics != null) {
                 return mPics.length;
             }
             return 0;
